@@ -1,8 +1,28 @@
-const Voucher = require('../models/voucher')
-//Lấy danh sách voucher
+const { default: slugify } = require('slugify')
+const Product = require('../models/product')
+//Thêm mới
+const create = async(req, res)=>{
+    try {
+        if(Object.keys(req.body).length == 0) throw new Error('Missing inputs')
+        if(req.body && req.body?.name) req.body.slug = slugify(req.body.name)
+        const rs = await Product.create(req.body)
+        return res.status(200).json({
+            success: rs ? true : false,
+            message: rs ? 'thành công' : 'thất bại',
+            data: rs
+        })
+    } catch (error) {
+        res.status(504).json({
+            message: `Có lỗi xảy ra: ${error.message}`,
+            success: false
+        })
+    }    
+}
+
+//get all
 const getAll = async(req, res) =>{
     try {
-        const rs = await Voucher.find().select('-createdAt -updatedAt -__v')
+        const rs = await Product.find().select('-createdAt -updatedAt -__v')
         return res.status(200).json({
             success: rs ? true : false,
             message: rs ? 'thành công' : 'thất bại',
@@ -15,13 +35,29 @@ const getAll = async(req, res) =>{
         })
     }
 }
-//Lấy 1 voucher by id
+//Get product by id
 const getById = async(req, res) =>{
+    try{
+        const {pid} = req.params
+        if(!pid) throw new Error('Missing input')
+        const rs = await Product.findById(pid)
+        return res.status(200).json({
+            success: rs ? true : false,
+            message: rs ? 'Lấy ra thành công' : 'lấy ra thất bại',
+            data: rs
+        })
+    }catch(error){
+        res.status(504).json({
+            message: `Có lỗi xảy ra: ${error.message}`,
+            success: false
+        })
+    }
+}
+//get by name
+const getByName = async(req, res) =>{
     try {
-        const {vid} = req.params
-        const rs = await Voucher.findById(vid).select('-createdAt -updatedAt -__v')
-        if(!rs) throw new Error('Voucher does not exists')
-
+        const {name} = req.query
+        const rs = await Product.findOne({name})    
         return res.status(200).json({
             success: rs ? true : false,
             message: rs ? 'thành công' : 'thất bại',
@@ -34,52 +70,16 @@ const getById = async(req, res) =>{
         })
     }
 }
-//get voucher by code
-const getVoucherByCode = async(req, res) =>{
-    try {
-        const {code} = req.params
-        const rs = await Voucher.findOne({code})    
-        return res.status(200).json({
-            success: rs ? true : false,
-            message: rs ? 'thành công' : 'thất bại',
-            data: rs
-        })
-    } catch (error) {
-        res.status(504).json({
-            message: `Có lỗi xảy ra: ${error.message}`,
-            success: false
-        })
-    }
-}
-//Thêm voucher
-const createVocher = async(req, res) =>{
-    try {
-        const {code} = req.body
-        if(Object.keys(req.body).length == 0) throw new Error('Missing input')
-        const checkCode = await Voucher.findOne({code})
-        if(checkCode) throw new Error('Mã code đã tồn tại')
-        const rs = await Voucher.create(req.body)
-        return res.status(200).json({
-            success: rs ? true : false,
-            message: rs ? 'Thêm mới thành công' : 'Thêm mới thất bại',
-            data: rs
-        })
-    } catch (error) {
-        res.status(500).json({
-            message: `Có lỗi xảy ra ${error.message}`,
-            success: false
-        })
-    }
-}
-//Cập nhật voucher
+//get by slug
+//update by id
 const updateById = async(req, res) =>{
     try {
-        const {vid} = req.params
-        if(!vid || Object.keys(vid).length == 0) throw new Error('Mising inputs')
-        const rs = await Voucher.findByIdAndUpdate(vid, req.body, {new: true})
+        const {pid} = req.params
+        if(!pid || Object.keys(pid).length == 0) throw new Error('Mising inputs')
+        const rs = await Product.findByIdAndUpdate(pid, req.body, {new: true})
         return res.status(200).json({
             success: rs ? true : false,
-            message: rs ? 'thành công' : 'thất bại',
+            message: rs ? 'update thành công' : 'update thất bại',
             data: rs
         })
     } catch (error) {
@@ -89,12 +89,12 @@ const updateById = async(req, res) =>{
         })
     }
 }
-//Xóa voucher
-const deleteVoucher = async(req, res) =>{
+//delete by id
+const deleteById = async(req, res) =>{
     try {
-        const {vid} = req.params
-        if(!vid) throw new Error('Params does not exists')   
-        const rs = await Voucher.findByIdAndDelete(vid)
+        const {pid} = req.params
+        if(!pid) throw new Error('Params does not exists')   
+        const rs = await Product.findByIdAndDelete(pid)
         return res.status(200).json({
             success: rs ? true : false,
             message: rs ? 'Xóa thành công' : 'Xóa thất bại',
@@ -106,13 +106,11 @@ const deleteVoucher = async(req, res) =>{
         })
     }
 }
-
-
 module.exports = {
     getAll,
     getById,
-    getVoucherByCode,
-    createVocher,
+    getByName,
+    create,
     updateById,
-    deleteVoucher
+    deleteById
 }

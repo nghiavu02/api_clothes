@@ -19,10 +19,6 @@ var voucherSchema = new mongoose.Schema({
         type:Date,
         default: Date.now()
     },
-    update: {
-        type: Date,
-        default: Date.now()
-    }
 }, {
     timestamps: true
 });

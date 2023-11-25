@@ -2,9 +2,9 @@ const Color = require('../models/color')
 const asyncHandler = require('express-async-handler')
 //Thêm
 const createColor = asyncHandler(async(req, res)=>{
-    const {name} = req.body
-    if(!name) throw new Error('Missing inputs')
-    const check = await Color.findOne({name})
+    const {code, name} = req.body
+    if(!name || !code) throw new Error('Missing inputs')
+    const check = await Color.findOne({code})
     if(check) throw new Error('Name color has exists')
     const rs = await Color.create(req.body)
     return res.status(200).json({
