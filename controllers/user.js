@@ -47,7 +47,7 @@ const getCurrent = asyncHandler(async(req, res)=>{
 })
 //lấy ra nhiều user
 const getUsers = asyncHandler(async(req, res) =>{
-    const users = await User.find().select('_id email username')
+    const users = await User.find().select('-password -role -refreshToken')
     return res.status(200).json({
         success: users ? true : false,
         message: users ? 'Lấy ra danh sách user thành công' : 'lấy ra thất bại',

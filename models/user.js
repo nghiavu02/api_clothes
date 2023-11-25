@@ -17,6 +17,15 @@ var userSchema = new mongoose.Schema({
         type:String,
         required:true,
     },
+    //nam 1 nu 0
+    gender: {
+        type: Number,
+        default: 1
+    },
+
+    mobile: {
+        type: String,
+    },
     password:{
         type:String,
         required:true,
@@ -24,6 +33,15 @@ var userSchema = new mongoose.Schema({
     role: {
         type: String,
         default: "User"
+    },
+    cart: [
+        {
+            product: {type: mongoose.Types.ObjectId, ref: 'Product'},
+            quantity: {type: Number, default: 1}
+        }
+    ],
+    address: {
+        type: String,
     },
     wishlist: [
         {

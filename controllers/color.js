@@ -38,7 +38,7 @@ const getColors = asyncHandler(async(req, res) =>{
 const updateColor = asyncHandler(async(req, res)=>{
     const {clid} = req.params
     if(!clid || Object.keys(req.body).length == 0) throw new Error('Missing inputs')
-    const rs = await Color.findByIdAndDelete(clid)
+    const rs = await Color.findByIdAndUpdate(clid, req.body, {new: true})
     return res.status(200).json({
         success: rs ? true : false,
         message: rs ? 'Sửa thành công' : 'Sửa thất bại',
