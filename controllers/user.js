@@ -1,6 +1,8 @@
 const User = require('../models/user')
 const asyncHandler = require('express-async-handler')
 const jwt = require('jsonwebtoken')
+const sendToEmail = require('../ultils/sendMail')
+const crypto = require('crypto')
 const {createAccessToken, createRefreshToken} = require('../middleware/jwt')
 //đăng ký
 const register = asyncHandler(async(req, res)=>{
@@ -95,9 +97,94 @@ const logout = asyncHandler(async(req, res) =>{
     else throw new Error('token in cookie valid')
 
 })
+
+//upload image
+const uploadImage = asyncHandler(async(req, res)=>{
+    const {_id} = req.user
+    if(!req.file || !_id) throw new Error('missing input')
+    const user = await User.findByIdAndUpdate(_id, {avatar: req.file.path}, {new: true})
+    return res.status(200).json({
+        success: true,
+        message: 'upload avatar thành công',
+        data: user
+    })
+})
+//update address
+const updateAddress = asyncHandler(async(req, res)=>{
+    const {_id} = req.user
+    const {address} = req.body
+    console.log(_id, address)
+    if(!_id || !address) throw new Error('Mising inputs')
+    const user = await User.findByIdAndUpdate(_id, {address: address}, {new: true}).select('')
+    return res.status(200).json({
+        success: true,
+        message: 'thành công',
+        data: user
+    })
+})
 //refreshToken
+const refreshAccessToken = asyncHandler(async (req, res, next) => {
+    //lấy token từ cookie
+    const cookie = req.cookies
+    //check xem có token hay không
+    if (!cookie || !cookie.refreshToken) throw new Error('No refresh token in  cookies')
+    //check xem token có hợp lệ không
+    await jwt.verify(cookie.refreshToken, process.env.JWT_SECRET, async (err, decode) => {
+        if (err) throw new Error('Invalid refresh token')
+        //check token có khớp với token đã lưu trong db
+        const response = await User.findOne({ _id: decode._id, refreshToken: cookie.refreshToken })
+        return res.status(200).json({
+            success: response ? true : false,
+            newAccessToken: response ? generateAccessToken(response._id, response.role) : 'refresh token not matched'
+        })
+    })
+})
 //forgotpassword
+const forgotPassword = asyncHandler(async (req, res, next) => {
+    const { email } = req.query;
+    if (!email) return next(new Error('Missing email'));
+
+    const user = await User.findOne({ email });
+    if (!user) return next(new Error('User not found'));
+
+    const resetToken = user.createPasswordChangedToken();
+    await user.save();
+
+    const html = `Xin vui lòng click vào link để thay đổi mật khẩu. Link có hiệu lực trong vòng 15 phút <a href=${process.env.URL_SERVER}/api/user/reset-password/${resetToken}>Click here</a>`;
+    const data = {
+        email,
+        html,
+    };
+
+    console.log(email);
+    try {
+        const rs = await sendToEmail(email, html);
+        return res.status(200).json({
+            success: true,
+            result: rs,
+        });
+    } catch (error) {
+        return next(error);
+    }
+});
 //resetpassword
+const resetPassword = asyncHandler(async (req, res) => {
+    const { password, token } = req.body
+    if (!password || !token) throw new Error("Mising inputs")
+    const passwordResetToken = crypto.createHash('sha256').update(token).digest('hex')
+    const user = await User.findOne({ passwordResetToken, passwordResetExpires: { $gt: Date.now() } })
+    if (!user) throw new Error('Invalid reset token')
+    user.password = password
+    user.passwordResetToken = undefined
+    user.passwordResetExpires = undefined
+    user.passwordChangeAt = Date.now()
+    await user.save()
+    return res.status(200).json({
+        success: user ? true : false,
+        message: user ? 'mật khẩu đã được thay đổi' : 'lỗi password'
+    })
+})
+
 module.exports = {
     register,
     login,
@@ -106,6 +193,11 @@ module.exports = {
     updateUser,
     updateUserByAdmin,
     deleteUser,
-    logout
+    logout,
+    updateAddress,
+    uploadImage,
+    refreshAccessToken,
+    forgotPassword,
+    resetPassword
 
 }

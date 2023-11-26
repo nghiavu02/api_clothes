@@ -11,6 +11,7 @@ var colorSchema = new mongoose.Schema({
         type: String,
         required: true,
     },
+
     
 });
 

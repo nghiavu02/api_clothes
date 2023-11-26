@@ -1,5 +1,7 @@
 const { default: slugify } = require('slugify')
 const Product = require('../models/product')
+const asyncHandler = require('express-async-handler')
+const { query } = require('express')
 //Thêm mới
 const create = async(req, res)=>{
     try {
@@ -20,27 +22,77 @@ const create = async(req, res)=>{
 }
 
 //get all
-const getAll = async(req, res) =>{
-    try {
-        const rs = await Product.find().select('-createdAt -updatedAt -__v')
-        return res.status(200).json({
-            success: rs ? true : false,
-            message: rs ? 'thành công' : 'thất bại',
-            data: rs
-        })
-    } catch (error) {
-        res.status(504).json({
-            message: `Có lỗi xảy ra: ${error.message}`,
-            success: false
-        })
+const getAll = asyncHandler(async (req, res, next) => {
+    const queries = { ...req.query }
+    const excludedFields = ['page', 'sort', 'limit', 'fields']
+    excludedFields.forEach(item => delete queries[item])
+    //advanced filtering 
+    let queryString = JSON.stringify(queries)
+    //tìm chỗi gte thay thế bằng => $get
+    queryString = queryString.replace(/\b(gte|gt|lte|lt)\b/g, match => `$${match}`)
+    const formatedQueries = JSON.parse(queryString)
+
+    //filtering
+    //regex: , 'i': không phân biệt hoa thường
+    if (queries?.name) formatedQueries.name = { $regex: queries.name, $options: 'i' }
+    let queryCommand = Product.find(formatedQueries)
+    //sorting
+    if (req.query.sort) {
+        const sortBy = req.query.sort.split(',').join(' ')
+        queryCommand = queryCommand.sort(sortBy)
     }
-}
+    else {
+        queryCommand = queryCommand.sort('-createAt')
+    }
+    //Field limiting
+    if (req.query.fields) {
+        const fields = req.query.fields.split(',').join(' ')
+        queryCommand = queryCommand.select(fields)
+    }
+
+    //Pagination
+    const page = +req.query.page * 1 || 1;
+    const limit = +req.query.limit * 1 || 10;
+    const skip = (page - 1) * limit;
+    queryCommand = queryCommand.skip(skip).limit(limit);
+    //  Execute query
+    queryCommand.then(async (response) => {
+        const counts = await Product.find(formatedQueries).countDocuments()
+        res.status(200).json({
+            success: response ? true : false,
+            message: response ? "Lấy ra sản phẩm" : "lấy sản phẩm thất bại",
+            counts,
+            page,
+            products: response ? response : null,
+        })
+    }).catch(next)
+})
+/*b1 lấy dữ liệu từ req.query
+b2 tạo mảng gồm limit, page, sort, fields
+b3 lặp qua mảng để xóa các phần tử query có các trường trong mảng
+b4 chuyển về json để thay thế các trường [gte|gt|lte|lt] = [$get|$gt|$lte|$lt]
+b5 chuyển về object
+Tìm kiếm trong chuỗi có chuỗi cần tìm
+ 6.1 check xem  name ko có tìm bằng $regex và $options: 'i' không phân biệt hoa thường
+ Sort
+6.2.1 kiểm tra nếu có sort thì tách các field nhập trong sort ra 
+6.2.2  dùng hàm sort
+Fields (select)
+6.3.1 Kiểm tra có nhập fields không thì tách tương tự sort
+6.3.2 dùng hàm select
+pagination
+6.4.1 nấy dữ liệu nhập vào limit, page, tính skip
+6.4.2 dùng hàm skip()limit()
+b7 trả về json
+*/
+
+
 //Get product by id
 const getById = async(req, res) =>{
     try{
         const {pid} = req.params
         if(!pid) throw new Error('Missing input')
-        const rs = await Product.findById(pid)
+        const rs = await Product.findById(pid).populate('color', 'name code')
         return res.status(200).json({
             success: rs ? true : false,
             message: rs ? 'Lấy ra thành công' : 'lấy ra thất bại',
@@ -106,11 +158,73 @@ const deleteById = async(req, res) =>{
         })
     }
 }
+//ratings
+const ratings = async(req, res) =>{
+    //b1 lấy _id user và star comment pid của product
+    //b2 check dữ liệu
+    //b3 lấy ra product có pid
+    //b4 kiểm tra _id trong rating của product đã đánh giá có trùng _id user đang đánh giá ko
+    // -trùng thì update đánh giá
+    // - ko trùng thì thêm mới
+   try {
+        const {_id} = req.user
+        const {star, comment, pid} = req.query
+        const product = await Product.findById(pid)
+        const checkRating = product.rating.find((item=> item.postedBy.toString() == _id.toString()))
+        if(checkRating){
+            //update rating
+            await Product.updateOne({
+                rating: {$elemMatch: {postedBy: _id}}
+            },{
+                $set: { 'rating.$.star': star, 'rating.$.comment': comment}
+            })
+        }else{
+            await Product.findByIdAndUpdate(pid, {
+                $push :{ rating :{star, comment, postedBy: _id}}
+            })
+        }
+        const rs = await Product.findById(pid)
+        const countRating = rs.rating.length
+        const sumStar = rs.rating.reduce((sum, e)=> sum + e.star, 0)
+        rs.totalRating = Math.ceil(sumStar * 10/ countRating) / 10
+        rs.save()
+        return res.status(200).json({
+            success: rs ? true : false,
+            message:  rs ? "Rating thành công" : 'thất bại',
+            data: rs
+        })
+   } catch (error) {
+        res.status(504).json({
+            message: `Có lỗi xảy ra ${error.message}`,
+            success: false
+        })
+   }
+}
+const uploadImage = async(req, res) =>{
+    try {
+        if(!req.files) throw new Error('upload file image error')
+        const {pid} = req.params
+        const product = await Product.findByIdAndUpdate(pid, {$push : {image: {$each: req.files.map(item => item.path)}}}, {new: true})
+        return res.status(200).json({
+            success: true,
+            message: 'upload image thành công',
+            data: product
+        })
+    } catch (error) {
+        res.status(504).json({
+            message: `Co lỗi xảy ra: ${error.message}`,
+            success: false
+        })
+    }
+}
+
 module.exports = {
     getAll,
     getById,
     getByName,
     create,
     updateById,
-    deleteById
+    deleteById,
+    ratings,
+    uploadImage
 }
