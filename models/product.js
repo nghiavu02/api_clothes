@@ -30,14 +30,6 @@ const productSchema = new mongoose.Schema({
         type: mongoose.Types.ObjectId,
         ref: 'Category'
     },
-    color: {
-        type: mongoose.Types.ObjectId,
-        ref: 'Color'
-    },
-    size: {
-        type: mongoose.Types.ObjectId,
-        ref: 'Size'
-    },
     rating: [
         {
             star: {type: Number},

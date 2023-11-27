@@ -218,6 +218,7 @@ const uploadImage = async(req, res) =>{
     }
 }
 
+
 module.exports = {
     getAll,
     getById,

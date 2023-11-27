@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken')
 const sendToEmail = require('../ultils/sendMail')
 const crypto = require('crypto')
 const {createAccessToken, createRefreshToken} = require('../middleware/jwt')
+const product = require('../models/product')
 //đăng ký
 const register = asyncHandler(async(req, res)=>{
     const {email,username, password, fullname} = req.body
@@ -184,6 +185,31 @@ const resetPassword = asyncHandler(async (req, res) => {
         message: user ? 'mật khẩu đã được thay đổi' : 'lỗi password'
     })
 })
+//update cart
+const updateCart = asyncHandler(async (req, res) => {
+    const {_id} = req.user
+    const {pid, quantity, size, color} = req.body
+    if(!pid || !size || !quantity) throw new Error('Mising inputs')
+    const user = await User.findById(_id).select('cart')
+    const checkProduct = user?.cart?.find(item => item.product.toString() == pid && item.size == size)
+    if(checkProduct){
+        const rs = await User.updateOne({'cart.product': pid, 'cart.size': size,'cart.color': color }, {'cart.$.quantity': quantity}, {new:true})
+        return res.status(200).json({
+            success: user ? true : false,
+            message: user ? 'Thành công' : 'thất bại',
+            data: rs
+          });
+    }
+    else{
+        const rs = await User.findByIdAndUpdate(_id, {$push: { cart: {product: pid, size, color, quantity}}}, {new:true})
+        return res.status(200).json({
+            success: user ? true : false,
+            message: user ? 'Thành công' : 'thất bại',
+            data: rs
+          });
+    }
+    
+});
 
 module.exports = {
     register,
@@ -198,6 +224,7 @@ module.exports = {
     uploadImage,
     refreshAccessToken,
     forgotPassword,
-    resetPassword
+    resetPassword,
+    updateCart,
 
 }
